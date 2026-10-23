@@ -1,0 +1,34 @@
+"""REST API: uvicorn zalma_ai.api:app --reload"""
+import pandas as pd
+from fastapi import FastAPI
+from pydantic import BaseModel
+from .data_gen import DATA, generate
+from .rag import CatalogAssistant
+from .forecast import purchase_plan
+from .tickets import TicketClassifier
+
+if not (DATA / "sales.csv").exists():
+    generate()
+app = FastAPI(title="ZALMA AI")
+assistant = CatalogAssistant(DATA / "catalog")
+classifier = TicketClassifier().fit(pd.read_csv(DATA / "tickets.csv"))
+
+
+class Text(BaseModel):
+    text: str
+
+
+@app.post("/ask")
+def ask(q: Text):
+    return assistant.ask(q.text)
+
+
+@app.post("/ticket")
+def ticket(t: Text):
+    return classifier.predict(t.text)
+
+
+@app.get("/forecast")
+def forecast():
+    plan = purchase_plan(pd.read_csv(DATA / "sales.csv"), pd.read_csv(DATA / "inventory.csv"))
+    return plan.to_dict(orient="records")
